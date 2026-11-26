@@ -95,14 +95,6 @@ python3 scripts/simulate_committee.py
 
 ---
 
-## Troubleshooting
-
-* **`Read-only file system (os error 30)`**: Set `CARGO_TARGET_DIR=/tmp/cargo-target-my-project` so Cargo writes build artifacts and lock files to `/tmp`.
-* **`Exec format error (os error 8)` when running `cargo test`**: Avoid executing `.wasm` test binaries directly on an `x86_64` host; run host-compatible tests with `--target x86_64-unknown-linux-gnu` where applicable.
-* **`cast send` connection or private key errors**: Verify the devnet gateway is reachable at `http://127.0.0.1:10087/api`, keep commands on valid lines without broken URLs, and pass a valid 32-byte (64-hex-character) test private key rather than an address.
-
----
-
 ## Repository
 
 Source code, scripts, and documentation: `https://github.com/Ayazakitou/Final_project_5298`
