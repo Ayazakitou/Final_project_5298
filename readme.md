@@ -73,7 +73,7 @@ CARGO_TARGET_DIR=/tmp/cargo-target-my-project cargo test --lib
 ### Sepolia Evaluation (24,135 Events)
 
 ```bash
-python3 scripts/eval_sepolia.py
+python3 scripts/evaluate_correctness.py
 ```
 
 * **Dataset**: 24,135 Sepolia USDC events
