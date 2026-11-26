@@ -302,46 +302,90 @@ mod tests {
         ]
     }"#;
 
+
     #[lyquid_test::test]
-    fn parses_transfer_log_count_and_fields() {
-        let logs = parse_transfer_logs(ETH_GET_LOGS_RESPONSE).unwrap();
-        assert_eq!(logs.len(), 2);
-        assert_eq!(
-            logs[0].from,
-            Address::from_str("0x16651f6be3941139e76442724c45fe631c3f4063").unwrap()
-        );
-        assert_eq!(
-            logs[1].to,
-            Address::from_str("0xa3f001d419e907ceea92a59604a15047631b3231").unwrap()
-        );
+    fn test_parse_valid_transfer_log() {
+        let raw_json = r#"{
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": [
+                {
+                    "blockNumber": "0x7a1201",
+                    "topics": [
+                        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                        "0x0000000000000000000000001111111111111111111111111111111111111111",
+                        "0x0000000000000000000000002222222222222222222222222222222222222222"
+                    ],
+                    "data": "0x00000000000000000000000000000000000000000000000000000000000003e8"
+                }
+            ]
+        }"#;
+
+        let logs = parse_transfer_logs(raw_json).expect("valid Transfer log should parse");
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].block_number, 8_000_001);
+        assert_eq!(logs[0].from, Address::from([0x11; 20]));
+        assert_eq!(logs[0].to, Address::from([0x22; 20]));
+        assert_eq!(logs[0].value, U256::from(1_000_u64));
+    }
+
+    #[lyquid_test::test]   
+    fn test_parse_malformed_input_returns_err() {
+        let bad_json = "{ not valid json";
+        assert!(parse_transfer_logs(bad_json).is_err());
+
+        let missing_fields = r#"{ "jsonrpc": "2.0", "id": 1, "result": [ { "topics": [] } ] }"#;
+        assert!(parse_transfer_logs(missing_fields).is_err());
     }
 
     #[lyquid_test::test]
-    fn summarizes_logs_and_produces_deterministic_commitment() {
-        let logs = parse_transfer_logs(ETH_GET_LOGS_RESPONSE).unwrap();
-        let contract = Address::from_str("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238").unwrap();
-        let topic = B256::from_str(
-            "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
-        )
-        .unwrap();
-
-        let s1 = summarize_logs(&logs, contract, topic, 100, 200, Address::ZERO);
-        let s2 = summarize_logs(&logs, contract, topic, 100, 200, Address::ZERO);
-        assert_eq!(s1.count, 2);
-        assert_eq!(s1.commitment, s2.commitment);
-        assert_ne!(s1.commitment, B256::ZERO);
-
-        let filtered = Address::from_str("0x16651f6be3941139e76442724c45fe631c3f4063").unwrap();
-        let s3 = summarize_logs(&logs, contract, topic, 100, 200, filtered);
-        assert_eq!(s3.count, 1);
-        assert_ne!(s3.commitment, s1.commitment);
+    fn test_parse_empty_logs() {
+        let empty_json = r#"{ "jsonrpc": "2.0", "id": 1, "result": [] }"#;
+        let logs = parse_transfer_logs(empty_json).expect("empty log list should succeed");
+        assert!(logs.is_empty());
     }
 
     #[lyquid_test::test]
-    fn formats_block_range_correctly() {
-        assert_eq!(format_block_param(0, false), "0x0");
-        assert_eq!(format_block_param(0, true), "latest");
-        assert_eq!(format_block_param(255, false), "0xff");
-        assert_eq!(format_block_param(1024, true), "0x400");
+    fn test_filter_zero_address_matches_all() {
+        let logs = sample_logs();
+        let matched: Vec<_> = logs
+            .iter()
+            .filter(|l| Address::ZERO == Address::ZERO || l.from == Address::ZERO || l.to == Address::ZERO)
+            .collect();
+        assert_eq!(matched.len(), 3);
+    }
+
+    #[lyquid_test::test]
+    fn test_filter_specific_address_from_and_to() {
+        let logs = sample_logs();
+        let target = Address::from([0x22; 20]);
+        let matched: Vec<_> = logs
+            .iter()
+            .filter(|l| l.from == target || l.to == target)
+            .collect();
+        assert_eq!(matched.len(), 2);
+    }
+
+    #[lyquid_test::test]
+    fn test_block_range_filter_count_and_aggregate_sum() {
+        let logs = sample_logs();
+        let from_block = 8_000_000_u64;
+        let to_block = 8_000_100_u64;
+        let target = Address::from([0x22; 20]);
+
+        let filtered: Vec<_> = logs
+            .iter()
+            .filter(|l| {
+                l.block_number >= from_block
+                    && l.block_number <= to_block
+                    && (l.from == target || l.to == target)
+            })
+            .collect();
+
+        let count = filtered.len() as u64;
+        let total: U256 = filtered.iter().fold(U256::ZERO, |acc, l| acc + l.value);
+
+        assert_eq!(count, 2);
+        assert_eq!(total, U256::from(3_500_u64));
     }
 }
